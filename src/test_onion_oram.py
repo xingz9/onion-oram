@@ -1,5 +1,6 @@
 import unittest
 import random
+import time
 import damgard_jurik
 from onion_oram import NonEncServerWrapper, EncServerWrapper
 from onion_oram import Client, Operations
@@ -59,6 +60,8 @@ class TestOnionORAM(unittest.TestCase):
             client.access(piece, Operations.WRITE, datas[piece])
 
     def test_basic_encrypted(self):
+        start = time.time()
+
         lambda_ = 80
         total_levels = 5
         total_usable_buckets = 1 << total_levels
@@ -86,7 +89,14 @@ class TestOnionORAM(unittest.TestCase):
                          [189, 224, 1, 2, 3, 4, 5, 6, 7, 8])
         self.assertEqual(client.access(1, Operations.READ), chunks)
 
+        end = time.time()
+        total_ms = 1000 * (end - start)
+        print("total: {} ms, selection: {} ms, {}".format(
+            total_ms, server_wrapper.selection_in_ms, server_wrapper.selection_in_ms / total_ms))
+
     def test_stress_encrypted(self):
+        start = time.time()
+
         lambda_ = 20
         total_levels = 3
         total_usable_buckets = 1 << total_levels
@@ -115,6 +125,11 @@ class TestOnionORAM(unittest.TestCase):
                              datas[piece])
             random.shuffle(datas[piece])
             client.access(piece, Operations.WRITE, datas[piece])
+
+        end = time.time()
+        total_ms = 1000 * (end - start)
+        print("total: {} ms, selection: {} ms, {}".format(
+            total_ms, server_wrapper.selection_in_ms, server_wrapper.selection_in_ms/total_ms))
 
 
 if __name__ == '__main__':

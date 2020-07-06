@@ -1,5 +1,7 @@
 import utils
 import copy
+import numpy as np
+import time
 import random
 from damgard_jurik import Payload, homomorphic_select
 
@@ -78,6 +80,7 @@ class EncServerWrapper(object):
         self.blocks_per_bucket = blocks_per_bucket
         self.server = Server(total_levels, blocks_per_bucket,
                              chunks_per_block)
+        self.selection_in_ms = 0
 
     def get_addresses(self, target):
         buckets_, addresses_ = self.server.get_addresses(target)
@@ -111,6 +114,7 @@ class EncServerWrapper(object):
         max_onion_layers = max([self.__onions(x) for x in bucket_ids])
         max_onion_layers += self.root_plain_space
         selectors = []
+        plain_selectors = []
         for i in range(len(bucket_ids)):
             bucket_id = bucket_ids[i]
             for j in range(self.blocks_per_bucket):
@@ -120,6 +124,7 @@ class EncServerWrapper(object):
                 p = Payload(select_vector[i][j], self.public_key,
                             max_onion_layers, max_onion_layers).lift_once()
                 selectors.append(p)
+                plain_selectors.append(select_vector[i][j])
         selected_chunks = []
         for c in range(self.chunks_per_block):
             payloads = []
@@ -134,8 +139,14 @@ class EncServerWrapper(object):
                                     self.root_plain_space,
                                     self.root_plain_space + onion_layers)
                     payloads.append(chunk)
-            decrypted = homomorphic_select(payloads, selectors).get_plaintext(
-                self.private_key).payload
+            start = time.time()
+            selected_encrypted = homomorphic_select(payloads, selectors)
+            # selected_encrypted = payloads[np.argmax(plain_selectors)]
+            end = time.time()
+            delta = end*1000 - start*1000
+            self.selection_in_ms += delta
+
+            decrypted = selected_encrypted.get_plaintext(self.private_key).payload
             selected_chunks.append(decrypted)
         return copy.deepcopy(selected_chunks)
 
