@@ -2,6 +2,7 @@ import random
 
 
 WORD_BITS = 64
+WORD_MASK = (1 << WORD_BITS) - 1
 
 
 class RandomGenerator:
@@ -167,6 +168,29 @@ class ClientPolyData:
         return result
 
 
+class ServerBulkData:
+
+    def __init__(self, bulk_x_vec):
+        self.spd_list = []
+        max_bits_len = max([bulk_x.bit_length() for bulk_x in bulk_x_vec])
+
+        bulk_x_list = [bulk_x for bulk_x in bulk_x_vec]
+        for _ in range(0, max_bits_len, WORD_BITS):
+            x_vec = []
+            for i in range(len(bulk_x_list)):
+                bulk_x = bulk_x_list[i]
+                x_vec.append(bulk_x & WORD_MASK)
+                bulk_x_list[i] = bulk_x >> WORD_BITS
+            self.spd_list.append(ServerPolyData(x_vec))
+
+    def step2(self, comm_list):
+        z1 = long(0)
+        for i in range(len(sbd.spd_list)):
+            spd = sbd.spd_list[-i - 1]
+            z1 = (z1 << WORD_BITS) ^ spd.step2(comm_list)
+        return z1
+
+
 if __name__ == '__main__':
     gen = RandomGenerator()
     beaver_gen = BeaverGenerator(gen)
@@ -189,17 +213,43 @@ if __name__ == '__main__':
         print("x  ^  y = 0x{:02x}".format(x & y))
         print
 
-        x_vec = [i + 1 for i in range(5)]
-        spd = ServerPolyData(x_vec)
-        for select_index in range(len(x_vec)):
-            y_vec = [long(0) for _ in range(len(x_vec))]
-            y_vec[select_index] = (1 << WORD_BITS) - 1
-            cpd = ClientPolyData(y_vec)
-            step_result = cpd.step1(beaver_gen)
+    x_vec = [i + 1 for i in range(5)]
+    spd = ServerPolyData(x_vec)
+    for select_index in range(len(x_vec)):
+        y_vec = [long(0) for _ in range(len(x_vec))]
+        y_vec[select_index] = WORD_MASK
+        cpd = ClientPolyData(y_vec)
+        step_result = cpd.step1(beaver_gen)
 
-            z1 = spd.step2(step_result.comm_list)
-            z2 = (spd.xor & step_result.u) ^ step_result.v
-            print("z1 = 0x{:02x}".format(z1))
-            print("z2 = 0x{:02x}".format(z2))
-            print("z1 ^ z2 = 0x{:02x}".format(z1 ^ z2))
-            print("x[{}] = 0x{:02x}".format(select_index, x_vec[select_index]))
+        z1 = spd.step2(step_result.comm_list)
+        z2 = (spd.xor & step_result.u) ^ step_result.v
+        print("z1 = 0x{:02x}".format(z1))
+        print("z2 = 0x{:02x}".format(z2))
+        print("z1 ^ z2 = 0x{:02x}".format(z1 ^ z2))
+        print("x[{}]    = 0x{:02x}".format(select_index, x_vec[select_index]))
+        print
+
+    bulk_x_vec = [
+        278916789189236200707028724350437890037610293376135536604105054872422263555950533467139651898671490218073413238203307964650234633615132740075143722954585,
+        59902358990837711399064918643197626906856826678722103104871756680752582570542561400023618845399180858302251442101903572474571277800453247669960685744030,
+        5099500265546185964695615655561737363356180182891654803938540187897206131807798342956857242040666894449125886179184706185809738346873960637646854053178631825494933038036015130704849108262931118363097360053411932548744163093428156798420802392925122961294020231006242524052625496525599976366597448311340437354834723749922373440059539810814637174,
+    ]
+    sbd = ServerBulkData(bulk_x_vec)
+    for select_index in range(len(bulk_x_vec)):
+        y_vec = [long(0) for _ in range(len(bulk_x_vec))]
+        y_vec[select_index] = WORD_MASK
+        cpd = ClientPolyData(y_vec)
+        step_result = cpd.step1(beaver_gen)
+
+        z1 = sbd.step2(step_result.comm_list)
+        print("z1 = 0x{:02x}".format(z1))
+
+        z2 = long(0)
+        for i in range(len(sbd.spd_list)):
+            spd = sbd.spd_list[-i - 1]
+            z2 = (z2 << WORD_BITS)
+            z2 ^= (spd.xor & step_result.u) ^ step_result.v
+        print("z2 = 0x{:02x}".format(z2))
+        print("z1 ^ z2 = 0x{:02x}".format(z1 ^ z2))
+        print("x[{}]    = 0x{:02x}".format(select_index, bulk_x_vec[select_index]))
+        print
