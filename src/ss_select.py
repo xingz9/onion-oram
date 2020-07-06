@@ -185,8 +185,8 @@ class ServerBulkData:
 
     def step2(self, comm_list):
         z1 = long(0)
-        for i in range(len(sbd.spd_list)):
-            spd = sbd.spd_list[-i - 1]
+        for i in range(len(self.spd_list)):
+            spd = self.spd_list[-i - 1]
             z1 = (z1 << WORD_BITS) ^ spd.step2(comm_list)
         return z1
 
