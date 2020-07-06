@@ -6,6 +6,9 @@ from onion_oram import NonEncServerWrapper, EncServerWrapper
 from onion_oram import Client, Operations
 
 
+use_ss_select=False
+
+
 class TestOnionORAM(unittest.TestCase):
     def test_basic(self):
         lambda_ = 5
@@ -74,7 +77,7 @@ class TestOnionORAM(unittest.TestCase):
         public, private = damgard_jurik.generate_keypair(128, root_plain_space)
         server_wrapper = EncServerWrapper(total_levels, blocks_per_bucket,
                                           chunks_per_block, root_plain_space,
-                                          public, private)
+                                          public, private, use_ss_select)
         client = Client(total_levels, total_blocks, blocks_per_bucket,
                         chunks_per_block, eviction_period, server_wrapper)
 
@@ -109,7 +112,7 @@ class TestOnionORAM(unittest.TestCase):
         public, private = damgard_jurik.generate_keypair(128, root_plain_space)
         server_wrapper = EncServerWrapper(total_levels, blocks_per_bucket,
                                           chunks_per_block, root_plain_space,
-                                          public, private)
+                                          public, private, use_ss_select)
         client = Client(total_levels, total_blocks, blocks_per_bucket,
                         chunks_per_block, eviction_period, server_wrapper)
 

@@ -4,6 +4,7 @@ import numpy as np
 import time
 import random
 from damgard_jurik import Payload, homomorphic_select
+from ss_select import WORD_BITS, WORD_MASK, ClientPolyData, ServerBulkData, RandomGenerator, BeaverGenerator
 
 VERBOSE_DEBUGGING = False
 
@@ -72,7 +73,7 @@ class Server(object):
 class EncServerWrapper(object):
     def __init__(self, total_levels, blocks_per_bucket,
                  chunks_per_block, root_plain_space,
-                 public_key, private_key):
+                 public_key, private_key, use_ss_select=False):
         self.root_plain_space = root_plain_space
         self.public_key = public_key
         self.private_key = private_key
@@ -81,6 +82,10 @@ class EncServerWrapper(object):
         self.server = Server(total_levels, blocks_per_bucket,
                              chunks_per_block)
         self.selection_in_ms = 0
+        self.use_ss_select = use_ss_select
+        if self.use_ss_select:
+            gen = RandomGenerator()
+            self.beaver_gen = BeaverGenerator(gen)
 
     def get_addresses(self, target):
         buckets_, addresses_ = self.server.get_addresses(target)
@@ -124,7 +129,11 @@ class EncServerWrapper(object):
                 p = Payload(select_vector[i][j], self.public_key,
                             max_onion_layers, max_onion_layers).lift_once()
                 selectors.append(p)
-                plain_selectors.append(select_vector[i][j])
+                if self.use_ss_select:
+                    plain_selectors.append(WORD_MASK if select_vector[i][j] > 0 else long(0))
+        if self.use_ss_select:
+            cpd = ClientPolyData(plain_selectors)
+            step_result = cpd.step1(self.beaver_gen)
         selected_chunks = []
         for c in range(self.chunks_per_block):
             payloads = []
@@ -139,9 +148,25 @@ class EncServerWrapper(object):
                                     self.root_plain_space,
                                     self.root_plain_space + onion_layers)
                     payloads.append(chunk)
+            if self.use_ss_select:
+                sbd = ServerBulkData([
+                    (chunk.payload << WORD_BITS) ^ long(chunk.current_space) for chunk in payloads
+                ])
             start = time.time()
-            selected_encrypted = homomorphic_select(payloads, selectors)
-            # selected_encrypted = payloads[np.argmax(plain_selectors)]
+            if self.use_ss_select:
+                z1 = sbd.step2(step_result.comm_list)
+                z2 = long(0)
+                for i in range(len(sbd.spd_list)):
+                    spd = sbd.spd_list[-i - 1]
+                    z2 = (z2 << WORD_BITS)
+                    z2 ^= (spd.xor & step_result.u) ^ step_result.v
+                selected_data = z1 ^ z2
+                current_space = selected_data & WORD_MASK
+                selected_encrypted = Payload(
+                    selected_data >> WORD_BITS, self.public_key, self.root_plain_space, current_space)
+            else:
+                selected_encrypted = homomorphic_select(payloads, selectors)
+                # selected_encrypted = payloads[np.argmax(plain_selectors)]
             end = time.time()
             delta = end*1000 - start*1000
             self.selection_in_ms += delta
