@@ -4,7 +4,8 @@ import numpy as np
 import time
 import random
 from damgard_jurik import Payload, homomorphic_select
-from ss_select import WORD_BITS, WORD_MASK, ClientPolyData, ServerBulkData, RandomGenerator, BeaverGenerator
+# from ss_select import WORD_BITS, WORD_MASK, ClientPolyData, ServerBulkData, RandomGenerator, BeaverGenerator
+from bit_ahe_select import WORD_BITS, WORD_MASK, gen_key, gen_select_vector, ServerBulkData
 
 VERBOSE_DEBUGGING = False
 
@@ -83,9 +84,9 @@ class EncServerWrapper(object):
                              chunks_per_block)
         self.selection_in_ms = 0
         self.use_ss_select = use_ss_select
-        if self.use_ss_select:
-            gen = RandomGenerator()
-            self.beaver_gen = BeaverGenerator(gen)
+        # if self.use_ss_select:
+        #     gen = RandomGenerator()
+        #     self.beaver_gen = BeaverGenerator(gen)
 
     def get_addresses(self, target):
         buckets_, addresses_ = self.server.get_addresses(target)
@@ -120,6 +121,8 @@ class EncServerWrapper(object):
         max_onion_layers += self.root_plain_space
         selectors = []
         plain_selectors = []
+        total_n = 0
+        select_index = -1
         for i in range(len(bucket_ids)):
             bucket_id = bucket_ids[i]
             for j in range(self.blocks_per_bucket):
@@ -130,10 +133,16 @@ class EncServerWrapper(object):
                             max_onion_layers, max_onion_layers).lift_once()
                 selectors.append(p)
                 if self.use_ss_select:
-                    plain_selectors.append(WORD_MASK if select_vector[i][j] > 0 else long(0))
+                    # plain_selectors.append(WORD_MASK if select_vector[i][j] > 0 else long(0))
+                    if select_vector[i][j] > 0:
+                        assert select_index == -1, "{}".format(select_index)
+                        select_index = total_n
+                    total_n += 1
         if self.use_ss_select:
-            cpd = ClientPolyData(plain_selectors)
-            step_result = cpd.step1(self.beaver_gen)
+            # cpd = ClientPolyData(plain_selectors)
+            # step_result = cpd.step1(self.beaver_gen)
+            key = gen_key()
+            select_vector = gen_select_vector(select_index, total_n, key)
         selected_chunks = []
         for c in range(self.chunks_per_block):
             payloads = []
@@ -154,13 +163,22 @@ class EncServerWrapper(object):
                 ])
             start = time.time()
             if self.use_ss_select:
-                z1 = sbd.step2(step_result.comm_list)
-                z2 = long(0)
-                for i in range(len(sbd.spd_list)):
-                    spd = sbd.spd_list[-i - 1]
-                    z2 = (z2 << WORD_BITS)
-                    z2 ^= (spd.xor & step_result.u) ^ step_result.v
-                selected_data = z1 ^ z2
+                # z1 = sbd.step2(step_result.comm_list)
+                # z2 = long(0)
+                # for i in range(len(sbd.spd_list)):
+                #     spd = sbd.spd_list[-i - 1]
+                #     z2 = (z2 << WORD_BITS)
+                #     z2 ^= (spd.xor & step_result.u) ^ step_result.v
+                # selected_data = z1 ^ z2
+
+                c_list = sbd.select(select_vector)
+                selected_data = 0
+                shift = 0
+                for c in c_list:
+                    d = c % key
+                    selected_data += d << shift
+                    shift += WORD_BITS
+
                 current_space = selected_data & WORD_MASK
                 selected_encrypted = Payload(
                     selected_data >> WORD_BITS, self.public_key, self.root_plain_space, current_space)
