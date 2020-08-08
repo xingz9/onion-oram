@@ -1,12 +1,12 @@
 import random
 
 
-WORD_BITS = 32
-WORD_MASK = (1 << WORD_BITS) - 1
-
-LOW_KEY_BITS = 33
+WORD_BITS = 128
+LOW_KEY_BITS = WORD_BITS + 1
 HIGH_KEY_BITS = 1
-RANDOM_BITS = 30
+RANDOM_BITS = WORD_BITS * 2 - LOW_KEY_BITS - HIGH_KEY_BITS
+
+WORD_MASK = (1 << WORD_BITS) - 1
 
 
 def gen_rand_bits(bits):
@@ -15,10 +15,13 @@ def gen_rand_bits(bits):
 
 def gen_key(low_key_bits=LOW_KEY_BITS, high_key_bits=HIGH_KEY_BITS):
     low_key = gen_rand_bits(low_key_bits - 1) * 2 + 1
-    while True:
-        high_key = gen_rand_bits(high_key_bits)
-        if high_key != 0:
-            break
+    if high_key_bits == 1:
+        high_key = 1
+    else:
+        while True:
+            high_key = gen_rand_bits(high_key_bits)
+            if high_key != 0:
+                break
     return low_key + (high_key << low_key_bits)
 
 
