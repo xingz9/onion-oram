@@ -2,31 +2,35 @@ import random
 
 
 WORD_BITS = 128
-LOW_KEY_BITS = WORD_BITS + 1
-HIGH_KEY_BITS = 1
-RANDOM_BITS = WORD_BITS * 2 - LOW_KEY_BITS - HIGH_KEY_BITS
-
 WORD_MASK = (1 << WORD_BITS) - 1
+
+N1 = WORD_BITS
+# N2 = N1 + 1  # 2^N1<=p<2^N2
+N2 = N1  # p=2^N1
+N3 = WORD_BITS
+N4 = lambda m_bits : N1 + m_bits + N2 + N3 + 1  # 2^(N4-1)+N1<=q<2^N4
+N5 = WORD_BITS
 
 
 def gen_rand_bits(bits):
     return random.getrandbits(bits)
 
 
-def gen_key(low_key_bits=LOW_KEY_BITS, high_key_bits=HIGH_KEY_BITS):
-    low_key = gen_rand_bits(low_key_bits - 1) * 2 + 1
-    if high_key_bits == 1:
-        high_key = 1
-    else:
-        while True:
-            high_key = gen_rand_bits(high_key_bits)
-            if high_key != 0:
-                break
-    return low_key + (high_key << low_key_bits)
+def gen_rand_odd(bits):
+    return 1 + (gen_rand_bits(bits - 1) << 1)
+
+
+def gen_key(m_bits):
+    bits_lb = N4(m_bits) - 1
+    while True:
+        lower_part = gen_rand_odd(bits_lb)
+        if lower_part >= (1 << N1):
+            break
+    return lower_part + (1 << bits_lb)
 
 
 def gen_select_vector(index, total, key):
-    select_vector = [gen_rand_bits(RANDOM_BITS) * key for _ in range(total)]
+    select_vector = [gen_rand_bits(N3) * (1 << N1) + gen_rand_bits(N5) * key for _ in range(total)]
     select_vector[index] += 1
     return select_vector
 
@@ -56,11 +60,12 @@ class ServerBulkData:
 
 
 if __name__ == "__main__":
-    key = gen_key()
+    n_data = 8
+    m_bits = (n_data - 1).bit_length()
+    key = gen_key(m_bits)
     print("key = 0x{:02x}, len = {}".format(key, key.bit_length()))
     print("")
 
-    n_data = 8
     data_vector = [gen_rand_bits(WORD_BITS) for _ in range(n_data)]
     for i in range(n_data):
         d = data_vector[i]
@@ -84,5 +89,5 @@ if __name__ == "__main__":
 
     computed_sum = sum(c_vector)
     print("sum = 0x{:02x}, len = {}".format(computed_sum, computed_sum.bit_length()))
-    print("sum % key = 0x{:02x}".format(computed_sum % key))
+    print("(sum%key) % 2^N = 0x{:02x}".format((computed_sum % key)%(1 << N1)))
     print("d[{}] = 0x{:02x}".format(index, data_vector[index]))

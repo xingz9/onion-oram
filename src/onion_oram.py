@@ -141,7 +141,7 @@ class EncServerWrapper(object):
         if self.use_ss_select:
             # cpd = ClientPolyData(plain_selectors)
             # step_result = cpd.step1(self.beaver_gen)
-            key = gen_key()
+            key = gen_key((total_n - 1).bit_length())
             select_vector = gen_select_vector(select_index, total_n, key)
         selected_chunks = []
         for c in range(self.chunks_per_block):
@@ -175,7 +175,7 @@ class EncServerWrapper(object):
                 selected_data = 0
                 shift = 0
                 for c in c_list:
-                    d = c % key
+                    d = (c % key) % (1 << WORD_BITS)
                     selected_data += d << shift
                     shift += WORD_BITS
 
